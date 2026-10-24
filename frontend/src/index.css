@@ -1,0 +1,197 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+@import "tailwindcss";
+
+@theme {
+  /* Typography */
+  --font-heading: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+
+  /* Brand Colors */
+  --color-brand-900: #0c1f37;
+  --color-brand-800: #152d4f;
+  --color-brand-700: #1E3A5F;
+  --color-brand-600: #2a4d7a;
+  --color-brand-500: #366196;
+
+  --color-accent-700: #0284C7;
+  --color-accent-600: #0EA5E9;
+  --color-accent-500: #38bdf8;
+  --color-accent-400: #7dd3fc;
+  --color-accent-300: #bae6fd;
+  --color-accent-200: #e0f2fe;
+  --color-accent-50: #f0f9ff;
+
+  /* Neutrals */
+  --color-surface-50: #F8FAFC;
+  --color-surface-100: #F1F5F9;
+  --color-surface-200: #E2E8F0;
+  --color-surface-300: #CBD5E1;
+  --color-surface-400: #94A3B8;
+  --color-surface-500: #64748B;
+  --color-surface-600: #475569;
+  --color-surface-700: #334155;
+  --color-surface-800: #1E293B;
+  --color-surface-900: #0F172A;
+
+  /* Status — ONLY for alerts */
+  --color-danger: #EF4444;
+  --color-danger-hover: #DC2626;
+  --color-warning: #F97316;
+  --color-caution: #EAB308;
+  --color-success: #22C55E;
+}
+
+@layer base {
+  :root {
+    --bg-app: #F8FAFC;
+    --bg-card: #FFFFFF;
+    --text-heading: #0F172A;
+    --text-body: #475569;
+    --text-caption: #94A3B8;
+    --border: #E2E8F0;
+    --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  }
+
+  .dark {
+    --bg-app: #0F172A;
+    --bg-card: #1E293B;
+    --text-heading: #F1F5F9;
+    --text-body: #94A3B8;
+    --text-caption: #64748B;
+    --border: #334155;
+    --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background-color: var(--bg-app);
+    color: var(--text-body);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-heading);
+    color: var(--text-heading);
+    line-height: 1.3;
+  }
+}
+
+/* ========== CARD SYSTEM ========== */
+.card {
+  @apply bg-white dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-xl shadow-[0_1px_3px_rgba(0,0,0,0.08)] dark:shadow-[0_1px_3px_rgba(0,0,0,0.3)];
+}
+
+/* ========== FORM SYSTEM ========== */
+.input-field {
+  @apply bg-white dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-lg text-surface-900 dark:text-white transition-all w-full;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-family: var(--font-sans);
+}
+
+.input-field::placeholder {
+  color: var(--text-caption);
+}
+
+.input-field:focus {
+  outline: none;
+  border-color: #0EA5E9;
+  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.15);
+}
+
+.input-field.error {
+  border-color: #EF4444;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15);
+}
+
+.form-label {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  font-family: var(--font-heading);
+  color: #374151;
+  margin-bottom: 6px;
+}
+
+.dark .form-label {
+  color: #CBD5E1;
+}
+
+/* ========== TABLE SYSTEM ========== */
+.table-header {
+  @apply bg-surface-50 dark:bg-surface-800 text-surface-500 dark:text-surface-400 border-b border-surface-200 dark:border-surface-700;
+  font-family: var(--font-heading);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.table-row {
+  @apply bg-white dark:bg-surface-900 border-b border-surface-200 dark:border-surface-700 hover:bg-surface-50 dark:hover:bg-surface-800 transition-colors;
+  min-height: 52px;
+}
+
+/* ========== SCROLLBAR ========== */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 20px;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #334155;
+}
+
+/* ========== PAGE BREADCRUMB ========== */
+.breadcrumb {
+  font-size: 13px;
+  color: var(--text-caption);
+  font-family: var(--font-sans);
+  font-weight: 500;
+}
+
+.breadcrumb a {
+  color: var(--text-caption);
+}
+
+.breadcrumb a:hover {
+  color: var(--text-body);
+}
+
+/* ========== PRINT MEDIA ========== */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  .print-only,
+  .print-only * {
+    visibility: visible;
+  }
+
+  .print-only {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+  }
+}

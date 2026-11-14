@@ -71,18 +71,21 @@ export function SessionProvider({ children }) {
   const role = membership?.role ?? null;
 
   useEffect(() => {
-    if (!pharmacy) { setBranches([]); return; }
+    if (!pharmacy) return undefined;
     let cancelled = false;
     listBranches(pharmacy.id).then((rows) => { if (!cancelled) setBranches(rows.filter((b) => b.is_active)); }).catch(setError);
     return () => { cancelled = true; };
   }, [pharmacy]);
 
+  // Only ever expose branches that belong to the selected pharmacy.
+  const pharmacyBranches = useMemo(() => (pharmacy ? branches.filter((b) => b.pharmacy_id === pharmacy.id) : []), [branches, pharmacy]);
+
   // Staff pinned to a branch always work in that branch.
   const branch = useMemo(() => {
-    if (!branches.length) return null;
-    if (membership?.branch_id) return branches.find((b) => b.id === membership.branch_id) ?? null;
-    return branches.find((b) => b.id === workspace.branchId) ?? branches.find((b) => b.is_default) ?? branches[0];
-  }, [branches, membership, workspace.branchId]);
+    if (!pharmacyBranches.length) return null;
+    if (membership?.branch_id) return pharmacyBranches.find((b) => b.id === membership.branch_id) ?? null;
+    return pharmacyBranches.find((b) => b.id === workspace.branchId) ?? pharmacyBranches.find((b) => b.is_default) ?? pharmacyBranches[0];
+  }, [pharmacyBranches, membership, workspace.branchId]);
 
   const selectPharmacy = useCallback((pharmacyId) => {
     const next = { pharmacyId, branchId: null };
@@ -107,12 +110,12 @@ export function SessionProvider({ children }) {
 
   const value = useMemo(() => ({
     status, error, session, user: session?.user ?? null, profile,
-    memberships, membership, pharmacy, role, branches, branch,
+    memberships, membership, pharmacy, role, branches: pharmacyBranches, branch,
     settings: pharmacy?.settings ?? {},
     isPlatformAdmin: Boolean(profile?.is_platform_admin),
     can: (action) => can(role, action),
     selectPharmacy, selectBranch, refresh, signOut,
-  }), [status, error, session, profile, memberships, membership, pharmacy, role, branches, branch, selectPharmacy, selectBranch, refresh, signOut]);
+  }), [status, error, session, profile, memberships, membership, pharmacy, role, pharmacyBranches, branch, selectPharmacy, selectBranch, refresh, signOut]);
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
 }

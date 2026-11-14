@@ -33,6 +33,13 @@ export function useBarcodeWedge(onScan, { enabled = true } = {}) {
           const normalized = normalizeScannedCode(code);
           if (normalized) {
             e.preventDefault();
+            e.stopPropagation();
+            if (isField && 'value' in target) {
+              // Clear the characters the scanner typed into the field.
+              const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(target), 'value')?.set;
+              setter?.call(target, '');
+              target.dispatchEvent(new Event('input', { bubbles: true }));
+            }
             handler.current(normalized);
           }
         }

@@ -464,6 +464,20 @@ await test('demo seed is service-role only, repeatable and self-consistent', asy
   assert.equal(real, 2);
 });
 
+await test('removing the demo tenant cascades cleanly and leaves real data intact', async () => {
+  await db.query('delete from public.pharmacies where is_demo');
+  const { rows } = await db.query(`select
+      (select count(*) from public.pharmacies where is_demo)::int as demo,
+      (select count(*) from public.stock_movements m join public.medicine_batches b on b.id = m.batch_id where b.is_demo)::int as orphan_moves,
+      (select count(*) from public.products where pharmacy_id = $1)::int as real_products,
+      (select count(*) from public.sales where pharmacy_id = $1)::int as real_sales`, [pharmacyA]);
+  assert.deepEqual([rows[0].demo, rows[0].orphan_moves, rows[0].real_products], [0, 0, 2]);
+  assert.ok(rows[0].real_sales > 0);
+  // Dashboard still works with no demo data present.
+  const d = await as(ownerA, async ({ one }) => (await one('select public.dashboard_summary($1) as d', [pharmacyA])).d);
+  assert.equal(d.stock.products, 2);
+});
+
 console.log(`\n${passed} passed, ${failures.length} failed`);
 if (failures.length) {
   for (const f of failures) console.error(`\n✗ ${f.name}\n${f.err.stack}`);

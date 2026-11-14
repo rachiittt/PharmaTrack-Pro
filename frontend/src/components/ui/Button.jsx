@@ -1,39 +1,49 @@
-import { motion } from 'framer-motion';
+import { Loader2 } from 'lucide-react';
 
-export function Button({ children, variant = 'primary', size = 'md', className = '', disabled, loading, onClick, type = 'button', ...props }) {
-  const variants = {
-    primary: 'bg-[#0EA5E9] hover:bg-[#0284C7] text-white shadow-sm',
-    secondary: 'bg-white dark:bg-surface-800 border border-[#E2E8F0] dark:border-surface-700 text-[#475569] dark:text-surface-300 hover:bg-[#F8FAFC] dark:hover:bg-surface-700',
-    danger: 'bg-[#EF4444] hover:bg-[#DC2626] text-white shadow-sm',
-    ghost: 'text-[#475569] dark:text-surface-400 hover:bg-surface-100 dark:hover:bg-surface-800',
-    outline: 'border border-[#0EA5E9] text-[#0EA5E9] hover:bg-accent-50 dark:hover:bg-accent-600/10',
-    success: 'bg-[#22C55E] hover:bg-[#16a34a] text-white shadow-sm',
-  };
-  const sizes = {
-    sm: 'px-3 py-1.5 text-xs',
-    md: 'px-5 py-2.5 text-sm',
-    lg: 'px-6 py-3 text-sm',
-  };
+const VARIANTS = {
+  primary: 'bg-primary text-on-primary hover:bg-primary-hover shadow-sm',
+  secondary: 'bg-surface text-ink border border-line-strong hover:bg-surface-2',
+  ghost: 'text-ink-2 hover:bg-surface-2 hover:text-ink',
+  danger: 'bg-danger text-white hover:opacity-90',
+  'danger-outline': 'border border-danger/40 text-danger hover:bg-danger-soft',
+  soft: 'bg-primary-soft text-primary-ink hover:brightness-95',
+};
+const SIZES = {
+  xs: 'h-7 px-2 text-xs gap-1 rounded-md',
+  sm: 'h-8 px-3 text-[13px] gap-1.5 rounded-md',
+  md: 'h-9 px-3.5 text-sm gap-2 rounded-lg',
+  lg: 'h-11 px-5 text-[15px] gap-2 rounded-lg',
+};
 
+export function Button({
+  variant = 'primary', size = 'md', icon: Icon, iconRight: IconRight, loading = false,
+  className = '', children, type = 'button', disabled, ...props
+}) {
   return (
-    <motion.button
+    <button
       type={type}
-      onClick={onClick}
       disabled={disabled || loading}
-      whileTap={!(disabled || loading) ? { scale: 0.97 } : {}}
-      transition={{ duration: 0.1 }}
-      className={`inline-flex items-center justify-center gap-2 font-semibold rounded-lg transition-all duration-150 font-heading
-        ${variants[variant]} ${sizes[size]} 
-        ${(disabled || loading) ? 'opacity-60 cursor-not-allowed' : ''} ${className}`}
+      className={`inline-flex items-center justify-center font-medium whitespace-nowrap transition-colors
+        disabled:opacity-50 disabled:cursor-not-allowed select-none ${VARIANTS[variant]} ${SIZES[size]} ${className}`}
       {...props}
     >
-      {loading && (
-        <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-        </svg>
-      )}
+      {loading ? <Loader2 className="animate-spin" size={size === 'lg' ? 18 : 15} aria-hidden /> : Icon && <Icon size={size === 'lg' ? 18 : 15} aria-hidden />}
       {children}
-    </motion.button>
+      {IconRight && !loading && <IconRight size={15} aria-hidden />}
+    </button>
+  );
+}
+
+export function IconButton({ icon: Icon, label, className = '', size = 16, ...props }) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      className={`inline-flex h-8 w-8 items-center justify-center rounded-md text-ink-2 hover:bg-surface-2 hover:text-ink transition-colors disabled:opacity-40 ${className}`}
+      {...props}
+    >
+      <Icon size={size} aria-hidden />
+    </button>
   );
 }

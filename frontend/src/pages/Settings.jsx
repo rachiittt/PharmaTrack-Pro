@@ -1,178 +1,163 @@
 import { useState } from 'react';
-import { useAuth } from '../context/AuthContext';
-import { Button } from '../components/ui/Button';
-import { User, Store, BellRing, Shield, Image as ImageIcon } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
+import { Plus } from 'lucide-react';
+import { useSession } from '../context/SessionContext';
+import { createBranch, updateBranch, updatePharmacy, updateProfile } from '../services/pharmacy';
+import { supabase } from '../lib/supabase';
+import { ROLE_LABELS } from '../lib/roles';
+import { Button } from '../components/ui/Button';
+import { Checkbox, Input } from '../components/ui/Field';
+import { Panel } from '../components/ui/Panel';
+import { PageHeader } from '../components/ui/Misc';
+import { Badge } from '../components/ui/Badge';
+
+function Section({ id, title, description, children, footer }) {
+  return (
+    <section id={id} className="grid gap-4 border-b border-line py-6 last:border-0 lg:grid-cols-[260px_1fr]">
+      <div><h2 className="text-sm font-semibold text-ink">{title}</h2>{description && <p className="mt-1 text-sm text-ink-3">{description}</p>}</div>
+      <div className="min-w-0 space-y-4">{children}{footer && <div className="flex justify-end gap-2">{footer}</div>}</div>
+    </section>
+  );
+}
+
+function ProfileSection() {
+  const { profile, refresh, role } = useSession();
+  const [form, setForm] = useState({ full_name: profile?.full_name || '', phone: profile?.phone || '' });
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  async function save() {
+    setBusy(true);
+    try { await updateProfile(profile.id, form); await refresh(); toast.success('Profile saved'); } catch (e) { toast.error(e.message); } finally { setBusy(false); }
+  }
+  async function changePassword() {
+    if (password.length < 8) { toast.error('Use at least 8 characters'); return; }
+    const { error } = await supabase.auth.updateUser({ password });
+    if (error) toast.error(error.message); else { toast.success('Password changed'); setPassword(''); }
+  }
+  return (
+    <Section title="Your profile" description={<>Signed in as {profile?.email}{role && <> · <Badge>{ROLE_LABELS[role]}</Badge></>}</>}
+      footer={<Button onClick={save} loading={busy}>Save profile</Button>}>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Input label="Full name" value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} />
+        <Input label="Mobile" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+      </div>
+      <div className="flex items-end gap-2">
+        <Input label="New password" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} className="flex-1" />
+        <Button variant="secondary" onClick={changePassword} disabled={!password}>Change</Button>
+      </div>
+    </Section>
+  );
+}
+
+function PharmacySection() {
+  const { pharmacy, refresh } = useSession();
+  const [form, setForm] = useState(pharmacy);
+  const [busy, setBusy] = useState(false);
+  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+  async function save() {
+    setBusy(true);
+    try { await updatePharmacy(pharmacy.id, form); await refresh(); toast.success('Pharmacy details saved'); } catch (e) { toast.error(e.message); } finally { setBusy(false); }
+  }
+  return (
+    <Section title="Pharmacy" description="Printed on every invoice." footer={<Button onClick={save} loading={busy}>Save details</Button>}>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Input label="Trading name" value={form.name || ''} onChange={set('name')} />
+        <Input label="Legal name" value={form.legal_name || ''} onChange={set('legal_name')} />
+        <Input label="GSTIN" value={form.gstin || ''} onChange={set('gstin')} inputClassName="code uppercase" maxLength={15} />
+        <Input label="Drug licence no." value={form.drug_license_no || ''} onChange={set('drug_license_no')} />
+        <Input label="Phone" value={form.phone || ''} onChange={set('phone')} />
+        <Input label="Email" type="email" value={form.email || ''} onChange={set('email')} />
+        <Input label="Address" value={form.address || ''} onChange={set('address')} className="sm:col-span-2" />
+        <Input label="City" value={form.city || ''} onChange={set('city')} />
+        <div className="grid grid-cols-2 gap-4">
+          <Input label="State" value={form.state || ''} onChange={set('state')} />
+          <Input label="PIN" value={form.pincode || ''} onChange={set('pincode')} />
+        </div>
+      </div>
+    </Section>
+  );
+}
+
+const THRESHOLDS = [
+  ['expiry_warning_days', 'Expiry warning (days)', 'Batches expiring within this many days are flagged'],
+  ['expiry_critical_days', 'Expiry critical (days)', 'Shown in red; must be ≤ warning'],
+  ['slow_moving_days', 'Slow moving after (days)', 'No sale for this long'],
+  ['dead_stock_days', 'Dead stock after (days)', 'No sale for this long'],
+  ['max_discount_pct', 'Max discount — managers & pharmacists (%)', ''],
+  ['cashier_max_discount_pct', 'Max discount — cashiers (%)', 'Must be ≤ the manager limit'],
+];
+
+function AlertsSection() {
+  const { pharmacy, refresh } = useSession();
+  const [s, setS] = useState(pharmacy.settings);
+  const [busy, setBusy] = useState(false);
+  async function save() {
+    const next = { ...s };
+    for (const [k] of THRESHOLDS) next[k] = Number(next[k]);
+    next.invoice_prefix = String(next.invoice_prefix || 'INV').toUpperCase();
+    setBusy(true);
+    try { await updatePharmacy(pharmacy.id, { settings: next }); await refresh(); toast.success('Settings saved'); }
+    catch (e) { toast.error(e.code === '22023' ? 'Check the values: critical ≤ warning, cashier discount ≤ manager discount, prefix A–Z/0–9.' : e.message); }
+    finally { setBusy(false); }
+  }
+  return (
+    <Section id="alerts" title="Alerts, discounts & billing" description="Applied to alerts, the dashboard and every bill." footer={<Button onClick={save} loading={busy}>Save settings</Button>}>
+      <div className="grid gap-4 sm:grid-cols-2">
+        {THRESHOLDS.map(([k, label, hint]) => (
+          <Input key={k} label={label} hint={hint} type="number" min="0" value={s[k]} onChange={(e) => setS({ ...s, [k]: e.target.value })} />
+        ))}
+        <Input label="Invoice prefix" value={s.invoice_prefix} onChange={(e) => setS({ ...s, invoice_prefix: e.target.value })} inputClassName="code uppercase" maxLength={10} hint="e.g. INV → INV/2026-27/00001" />
+      </div>
+      <Checkbox checked={s.prices_include_tax !== false} onChange={(e) => setS({ ...s, prices_include_tax: e.target.checked })}
+        label="Selling prices include GST" description="Standard for MRP-based retail. Turn off only if you price before tax." />
+    </Section>
+  );
+}
+
+function BranchesSection() {
+  const { pharmacy, branches, refresh } = useSession();
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+  async function add() {
+    setBusy(true);
+    try { await createBranch(pharmacy.id, { name: name.trim() }); setName(''); await refresh(); toast.success('Branch added'); }
+    catch (e) { toast.error(e.message); } finally { setBusy(false); }
+  }
+  async function rename(b) {
+    const next = window.prompt('Branch name', b.name);
+    if (!next || next.trim() === b.name) return;
+    try { await updateBranch(b.id, { name: next.trim() }); await refresh(); toast.success('Branch renamed'); } catch (e) { toast.error(e.message); }
+  }
+  return (
+    <Section title="Branches" description="Stock, bills and purchases are kept per branch.">
+      <ul className="divide-y divide-line rounded-lg border border-line">
+        {branches.map((b) => (
+          <li key={b.id} className="flex items-center justify-between px-4 py-2.5 text-sm">
+            <span>{b.name} {b.is_default && <Badge className="ml-1">Default</Badge>}</span>
+            <Button size="xs" variant="ghost" onClick={() => rename(b)}>Rename</Button>
+          </li>
+        ))}
+      </ul>
+      <div className="flex gap-2">
+        <Input label="New branch" value={name} onChange={(e) => setName(e.target.value)} className="flex-1" placeholder="e.g. Sector 21" />
+        <Button icon={Plus} variant="secondary" className="self-end" onClick={add} loading={busy} disabled={name.trim().length < 2}>Add</Button>
+      </div>
+    </Section>
+  );
+}
 
 export default function Settings() {
-  const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState('profile');
-  const [saving, setSaving] = useState(false);
-
-  const TABS = [
-    { id: 'profile', label: 'My Profile', icon: User },
-    { id: 'store', label: 'Store Details', icon: Store },
-    { id: 'notifications', label: 'Alert Preferences', icon: BellRing },
-    { id: 'security', label: 'Security', icon: Shield },
-  ];
-
-  const handleSave = (e) => {
-    e.preventDefault();
-    setSaving(true);
-    setTimeout(() => {
-      toast.success('Settings saved successfully');
-      setSaving(false);
-    }, 600);
-  };
-
+  const { can, pharmacy } = useSession();
   return (
-    <div className="space-y-6 pb-10 max-w-5xl mx-auto">
-      <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-        <div>
-          <h1 className="text-[28px] font-bold text-[#0F172A] dark:text-[#F1F5F9] font-heading tracking-tight">
-            Settings & Preferences
-          </h1>
-          <div className="breadcrumb mt-1">
-            <span className="text-[#64748B]">Dashboard</span> <span className="mx-2">/</span> <span className="text-[#0F172A] dark:text-[#F1F5F9]">Settings</span>
-          </div>
-        </div>
-      </motion.div>
-
-      <div className="flex flex-col md:flex-row gap-6">
-        {/* Sidebar Tabs */}
-        <motion.div initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3, delay: 0.1 }} className="w-full md:w-64 flex-shrink-0">
-          <div className="card p-2">
-            {TABS.map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-bold transition-colors ${
-                  activeTab === tab.id 
-                    ? 'bg-[#0EA5E9]/10 text-[#0EA5E9]' 
-                    : 'text-[#64748B] hover:bg-[#F8FAFC] dark:hover:bg-surface-800 hover:text-[#0F172A] dark:hover:text-white'
-                }`}
-              >
-                <tab.icon size={18} /> {tab.label}
-              </button>
-            ))}
-          </div>
-        </motion.div>
-
-        {/* Content Area */}
-        <motion.div initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.3, delay: 0.2 }} className="flex-1">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={activeTab}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.2 }}
-            >
-              {activeTab === 'profile' && (
-                <div className="card overflow-hidden">
-                  <div className="p-6 border-b border-[#E2E8F0] dark:border-surface-700">
-                    <h3 className="text-lg font-bold font-heading text-[#0F172A] dark:text-[#F1F5F9]">Personal Information</h3>
-                    <p className="text-sm text-[#64748B] mt-1">Update your account profile details and email.</p>
-                  </div>
-                  <form onSubmit={handleSave} className="p-6 space-y-6">
-                    <div className="flex items-center gap-6 pb-6 border-b border-[#E2E8F0] dark:border-surface-700">
-                      <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#1E3A5F] to-[#0EA5E9] flex items-center justify-center text-white text-2xl font-bold shadow-md">
-                        {user?.full_name?.charAt(0) || 'A'}
-                      </div>
-                      <div>
-                        <Button variant="secondary" className="mb-2"><ImageIcon size={16} className="mr-2"/> Change Avatar</Button>
-                        <p className="text-xs text-[#94A3B8]">JPG, GIF or PNG. 1MB max.</p>
-                      </div>
-                    </div>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div><label className="form-label">Full Name</label><input className="input-field" defaultValue={user?.full_name || 'Admin User'} /></div>
-                      <div><label className="form-label">Email Address</label><input className="input-field" defaultValue={user?.email || 'admin@spms.com'} /></div>
-                      <div><label className="form-label">Phone Number</label><input className="input-field" defaultValue="+91 98765 43210" /></div>
-                      <div><label className="form-label">Role</label><input className="input-field bg-surface-50 text-[#94A3B8] cursor-not-allowed" defaultValue={user?.role || 'Administrator'} disabled /></div>
-                    </div>
-                    
-                    <div className="pt-4 flex justify-end">
-                      <Button type="submit" loading={saving}>Save Profile Changes</Button>
-                    </div>
-                  </form>
-                </div>
-              )}
-
-              {activeTab === 'store' && (
-                <div className="card overflow-hidden">
-                  <div className="p-6 border-b border-[#E2E8F0] dark:border-surface-700">
-                    <h3 className="text-lg font-bold font-heading text-[#0F172A] dark:text-[#F1F5F9]">Store Configuration</h3>
-                    <p className="text-sm text-[#64748B] mt-1">Details used on invoices and reports.</p>
-                  </div>
-                  <form onSubmit={handleSave} className="p-6 space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="md:col-span-2"><label className="form-label">Pharmacy Name</label><input className="input-field" defaultValue="City Health Pharmacy" /></div>
-                      <div className="md:col-span-2"><label className="form-label">Address</label><textarea className="input-field h-24 resize-none" defaultValue="123 Health Ave, Medical District&#10;Mumbai, MH 400001" /></div>
-                      <div><label className="form-label">GSTIN</label><input className="input-field font-mono uppercase" defaultValue="27AADCB2230M1Z2" /></div>
-                      <div><label className="form-label">Drug License No.</label><input className="input-field font-mono uppercase" defaultValue="MH-MZ1-123456" /></div>
-                    </div>
-                    <div className="pt-4 flex justify-end">
-                      <Button type="submit" loading={saving}>Save Store Details</Button>
-                    </div>
-                  </form>
-                </div>
-              )}
-
-              {activeTab === 'notifications' && (
-                <div className="card overflow-hidden">
-                  <div className="p-6 border-b border-[#E2E8F0] dark:border-surface-700">
-                    <h3 className="text-lg font-bold font-heading text-[#0F172A] dark:text-[#F1F5F9]">Alert Preferences</h3>
-                    <p className="text-sm text-[#64748B] mt-1">Configure when and how you receive alerts.</p>
-                  </div>
-                  <form onSubmit={handleSave} className="p-6 space-y-6">
-                    <div className="space-y-4">
-                      {[
-                        { title: 'Low Stock Alerts', desc: 'Notify when items fall below minimum threshold' },
-                        { title: 'Expiry Warnings', desc: 'Notify 30 days before items expire' },
-                        { title: 'Daily Summary', desc: 'Email a summary of sales at end of day' }
-                      ].map((pref, i) => (
-                        <div key={i} className="flex items-center justify-between p-4 bg-[#F8FAFC] dark:bg-surface-800/50 rounded-lg border border-[#E2E8F0] dark:border-surface-700">
-                          <div>
-                            <p className="font-bold text-[#0F172A] dark:text-[#F1F5F9]">{pref.title}</p>
-                            <p className="text-sm text-[#64748B]">{pref.desc}</p>
-                          </div>
-                          <label className="relative inline-flex items-center cursor-pointer">
-                            <input type="checkbox" className="sr-only peer" defaultChecked />
-                            <div className="w-11 h-6 bg-surface-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#0EA5E9]"></div>
-                          </label>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="pt-4 flex justify-end">
-                      <Button type="submit" loading={saving}>Save Preferences</Button>
-                    </div>
-                  </form>
-                </div>
-              )}
-
-              {activeTab === 'security' && (
-                <div className="card overflow-hidden">
-                  <div className="p-6 border-b border-[#E2E8F0] dark:border-surface-700">
-                    <h3 className="text-lg font-bold font-heading text-[#0F172A] dark:text-[#F1F5F9]">Change Password</h3>
-                  </div>
-                  <form onSubmit={handleSave} className="p-6 space-y-6">
-                    <div className="max-w-md space-y-4">
-                      <div><label className="form-label">Current Password</label><input type="password" className="input-field" /></div>
-                      <div><label className="form-label">New Password</label><input type="password" className="input-field" /></div>
-                      <div><label className="form-label">Confirm New Password</label><input type="password" className="input-field" /></div>
-                    </div>
-                    <div className="pt-4 flex justify-start">
-                      <Button type="submit" loading={saving}>Update Password</Button>
-                    </div>
-                  </form>
-                </div>
-              )}
-            </motion.div>
-          </AnimatePresence>
-        </motion.div>
-      </div>
-    </div>
+    <>
+      <PageHeader title="Settings" />
+      <Panel>
+        <ProfileSection />
+        {pharmacy && can('settings.pharmacy') && <><PharmacySection key={`p${pharmacy.updated_at}`} /><AlertsSection key={`a${pharmacy.updated_at}`} /><BranchesSection /></>}
+        {pharmacy && !can('settings.pharmacy') && (
+          <Section title="Pharmacy settings" description="Only the owner can change pharmacy details, thresholds and branches." />
+        )}
+      </Panel>
+    </>
   );
 }

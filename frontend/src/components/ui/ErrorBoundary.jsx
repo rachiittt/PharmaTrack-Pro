@@ -1,64 +1,32 @@
-import React from 'react';
+import { Component } from 'react';
 
-export class ErrorBoundary extends React.Component {
-  constructor(props) {
-    super(props);
-    this.state = { hasError: false, error: null };
-  }
+/** Last-resort boundary so a rendering bug never leaves a blank screen. */
+export class ErrorBoundary extends Component {
+  state = { error: null };
 
   static getDerivedStateFromError(error) {
-    return { hasError: true, error };
+    return { error };
   }
 
-  componentDidCatch(error, errorInfo) {
-    console.error('PharmaTrack ErrorBoundary caught an error:', error, errorInfo);
+  componentDidCatch(error, info) {
+    console.error('Unhandled UI error', error, info.componentStack);
   }
-
-  handleReset = () => {
-    try {
-      localStorage.removeItem('spms_session');
-      localStorage.removeItem('spms_user');
-      localStorage.setItem('spms_demo', 'true');
-    } catch {}
-    window.location.href = '/';
-  };
 
   render() {
-    if (this.state.hasError) {
-      return (
-        <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center p-6 text-slate-800 font-sans">
-          <div className="bg-white border border-slate-200 rounded-2xl shadow-xl max-w-lg w-full p-8 text-center">
-            <div className="w-16 h-16 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center mx-auto mb-4 text-2xl font-bold">
-              ⚠️
-            </div>
-            <h2 className="text-2xl font-bold font-heading text-slate-900 mb-2">Something went wrong</h2>
-            <p className="text-slate-600 text-sm mb-6">
-              An unexpected display error occurred. You can restore the app immediately by entering demo mode or reloading.
-            </p>
-            <div className="bg-slate-50 border border-slate-200 p-3 rounded-lg text-left text-xs font-mono text-red-700 mb-6 overflow-auto max-h-32">
-              {this.state.error?.message || 'Unknown render error'}
-            </div>
-            <div className="flex gap-3 justify-center">
-              <button
-                type="button"
-                onClick={() => window.location.reload()}
-                className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-sm font-semibold text-slate-700 transition-colors"
-              >
-                Reload Page
-              </button>
-              <button
-                type="button"
-                onClick={this.handleReset}
-                className="px-5 py-2.5 bg-[#0EA5E9] hover:bg-[#0284C7] rounded-lg text-sm font-semibold text-white shadow-sm transition-colors"
-              >
-                Reset & Enter Demo Mode
-              </button>
-            </div>
-          </div>
+    if (!this.state.error) return this.props.children;
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-bg p-6">
+        <div className="max-w-md rounded-xl border border-line bg-surface p-6 text-center">
+          <h1 className="text-lg font-semibold text-ink">Something went wrong</h1>
+          <p className="mt-2 text-sm text-ink-3">
+            The page hit an unexpected error. Your data is safe — nothing is saved unless the server confirms it.
+          </p>
+          <pre className="mt-4 max-h-32 overflow-auto rounded-lg bg-surface-2 p-3 text-left text-xs text-ink-2">{String(this.state.error?.message || this.state.error)}</pre>
+          <button type="button" onClick={() => window.location.reload()} className="mt-4 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-on-primary">
+            Reload
+          </button>
         </div>
-      );
-    }
-
-    return this.props.children;
+      </div>
+    );
   }
 }

@@ -1,237 +1,205 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { BrowserMultiFormatReader, NotFoundException } from '@zxing/library';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Camera, X, Keyboard, ScanLine, RefreshCw } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Camera, Keyboard, RefreshCw, ScanLine } from 'lucide-react';
+import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
+import { BareInput } from '../ui/Field';
+import { InlineAlert } from '../ui/States';
+import { SCAN_FORMATS, normalizeScannedCode } from '../../lib/barcode';
 
 /**
- * Real camera-based barcode/QR scanner.
- * Uses @zxing/library to decode EAN-13, Code-128, QR, DataMatrix, etc.
- * Falls back to manual text input on devices without a camera.
+ * Camera + manual barcode entry.
  *
- * Props:
- *  - isOpen: boolean
- *  - onClose: () => void
- *  - onScan: (code: string) => void
- *  - title?: string
+ * Fixes over the previous implementation:
+ *  - asks for the camera with facingMode first (device lists are empty before
+ *    permission on Safari/Firefox), then enumerates for the switch button;
+ *  - plays inline + muted so iOS Safari renders the stream;
+ *  - uses the native BarcodeDetector when present, ZXing (lazy-loaded) otherwise;
+ *  - accepts a code only after two identical consecutive reads and a valid
+ *    check digit, then stops the camera — one scan, one callback;
+ *  - explains secure-context / permission failures and falls back to typing.
+ *
+ * onDetected(code) is called with a normalised code. Whether it exists in the
+ * catalogue is the caller's job — this component never invents a result.
  */
-export function BarcodeScanner({ isOpen, onClose, onScan, title = 'Scan Barcode / QR Code' }) {
-  const videoRef = useRef(null);
-  const readerRef = useRef(null);
-  const [mode, setMode] = useState('camera'); // 'camera' | 'manual'
-  const [manualCode, setManualCode] = useState('');
-  const [error, setError] = useState(null);
-  const [scanning, setScanning] = useState(false);
-  const [devices, setDevices] = useState([]);
-  const [activeDeviceIdx, setActiveDeviceIdx] = useState(0);
-  const [lastScanned, setLastScanned] = useState(null);
+export function BarcodeScanner({ open, onClose, onDetected, title = 'Scan barcode' }) {
+  const [mode, setMode] = useState('camera');
+  const [status, setStatus] = useState('idle'); // idle | starting | scanning | error
+  const [message, setMessage] = useState(null);
+  const [manual, setManual] = useState('');
+  const [manualError, setManualError] = useState(null);
+  const [cameras, setCameras] = useState([]);
+  const [cameraIndex, setCameraIndex] = useState(-1); // -1 = rear camera via facingMode
+  const video = useRef(null);
+  const stopRef = useRef(() => {});
 
-  // Initialize the reader
+  const finish = useCallback((code) => {
+    stopRef.current();
+    navigator.vibrate?.(60);
+    onDetected(code);
+  }, [onDetected]);
+
   useEffect(() => {
-    if (!isOpen) return;
-    const reader = new BrowserMultiFormatReader();
-    readerRef.current = reader;
+    if (!open || mode !== 'camera') return undefined;
+    let cancelled = false;
+    let stream = null;
+    let reader = null;
+    let frame = 0;
+    let last = null;
 
-    // List available video devices
-    reader.listVideoInputDevices()
-      .then((videoInputDevices) => {
-        if (videoInputDevices.length === 0) {
-          setMode('manual');
-          setError('No camera found. Enter barcode manually.');
-        } else {
-          setDevices(videoInputDevices);
-          setMode('camera');
-          setError(null);
-        }
-      })
-      .catch(() => {
+    const stop = () => {
+      cancelled = true;
+      cancelAnimationFrame(frame);
+      try { reader?.reset(); } catch { /* already stopped */ }
+      stream?.getTracks().forEach((t) => t.stop());
+      if (video.current) video.current.srcObject = null;
+    };
+    stopRef.current = stop;
+
+    const candidate = (raw) => {
+      const code = normalizeScannedCode(raw);
+      if (!code) { setMessage('Code not readable — hold the pack steady and closer.'); last = null; return; }
+      if (code === last) finish(code);
+      else last = code;
+    };
+
+    (async () => {
+      setStatus('starting');
+      setMessage(null);
+      if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+        setStatus('error');
+        setMessage('The camera only works over HTTPS or on localhost. Use a USB scanner or type the code.');
         setMode('manual');
-        setError('Camera access denied. Enter barcode manually.');
-      });
+        return;
+      }
+      try {
+        const constraints = cameraIndex >= 0 && cameras[cameraIndex]
+          ? { deviceId: { exact: cameras[cameraIndex].deviceId } }
+          : { facingMode: { ideal: 'environment' } };
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: false, video: { ...constraints, width: { ideal: 1280 }, height: { ideal: 720 } },
+        });
+        if (cancelled) { stream.getTracks().forEach((t) => t.stop()); return; }
+        const el = video.current;
+        el.srcObject = stream;
+        el.muted = true;
+        el.setAttribute('playsinline', 'true');
+        await el.play();
 
-    return () => {
-      reader.reset();
-      readerRef.current = null;
-    };
-  }, [isOpen]);
-
-  // Start scanning when in camera mode
-  useEffect(() => {
-    if (!isOpen || mode !== 'camera' || devices.length === 0) return;
-    const reader = readerRef.current;
-    if (!reader || !videoRef.current) return;
-
-    setScanning(true);
-    setError(null);
-
-    const deviceId = devices[activeDeviceIdx]?.deviceId;
-
-    reader.decodeFromVideoDevice(deviceId, videoRef.current, (result, err) => {
-      if (result) {
-        const code = result.getText();
-        if (code !== lastScanned) {
-          setLastScanned(code);
-          // Vibrate on supported devices
-          if (navigator.vibrate) navigator.vibrate(100);
-          onScan(code);
+        if (!cameras.length) {
+          const devices = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'videoinput');
+          if (!cancelled) setCameras(devices);
         }
+
+        if ('BarcodeDetector' in window) {
+          const supported = await window.BarcodeDetector.getSupportedFormats();
+          const detector = new window.BarcodeDetector({ formats: SCAN_FORMATS.filter((f) => supported.includes(f)) });
+          let lastRun = 0;
+          const tick = async (t) => {
+            if (cancelled) return;
+            if (t - lastRun > 120 && el.readyState >= 2) {
+              lastRun = t;
+              try {
+                const [hit] = await detector.detect(el);
+                if (hit && !cancelled) candidate(hit.rawValue);
+              } catch { /* frame not ready */ }
+            }
+            frame = requestAnimationFrame(tick);
+          };
+          frame = requestAnimationFrame(tick);
+        } else {
+          const { BrowserMultiFormatReader, DecodeHintType, BarcodeFormat } = await import('@zxing/library');
+          const hints = new Map([
+            [DecodeHintType.POSSIBLE_FORMATS, [
+              BarcodeFormat.EAN_13, BarcodeFormat.EAN_8, BarcodeFormat.UPC_A, BarcodeFormat.UPC_E,
+              BarcodeFormat.CODE_128, BarcodeFormat.CODE_39, BarcodeFormat.ITF, BarcodeFormat.QR_CODE, BarcodeFormat.DATA_MATRIX,
+            ]],
+            [DecodeHintType.TRY_HARDER, true],
+          ]);
+          reader = new BrowserMultiFormatReader(hints, 120);
+          if (cancelled) return;
+          reader.decodeFromVideoElementContinuously(el, (result) => {
+            if (result && !cancelled) candidate(result.getText());
+          }).catch(() => {});
+        }
+        if (!cancelled) setStatus('scanning');
+      } catch (err) {
+        if (cancelled) return;
+        setStatus('error');
+        setMessage(err?.name === 'NotAllowedError'
+          ? 'Camera permission was denied. Allow camera access in the browser settings, or type the code.'
+          : err?.name === 'NotFoundError' ? 'No camera was found on this device.' : `Could not start the camera (${err?.message || err}).`);
       }
-      if (err && !(err instanceof NotFoundException)) {
-        // Ignore NotFoundException (no barcode in frame yet)
-        console.warn('Scanner error:', err);
-      }
-    })
-    .catch((e) => {
-      setError('Could not start camera: ' + e.message);
-      setMode('manual');
-    });
+    })();
 
-    return () => {
-      reader.reset();
-      setScanning(false);
-    };
-  }, [isOpen, mode, devices, activeDeviceIdx]);
+    return stop;
+  }, [open, mode, cameraIndex, cameras, finish]);
 
-  const switchCamera = useCallback(() => {
-    if (devices.length > 1) {
-      readerRef.current?.reset();
-      setActiveDeviceIdx((prev) => (prev + 1) % devices.length);
-    }
-  }, [devices]);
+  function close() {
+    setManual(''); setManualError(null); setMessage(null); setStatus('idle');
+    onClose();
+  }
 
-  const handleManualSubmit = (e) => {
+  function submitManual(e) {
     e.preventDefault();
-    if (manualCode.trim()) {
-      onScan(manualCode.trim());
-      setManualCode('');
-    }
-  };
-
-  if (!isOpen) return null;
+    const code = normalizeScannedCode(manual);
+    if (!code) { setManualError('That is not a valid barcode — check the digits (the last digit is a checksum).'); return; }
+    setManual('');
+    finish(code);
+  }
 
   return (
-    <AnimatePresence>
-      <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.9 }}
-          className="card w-full max-w-md bg-white dark:bg-surface-800 overflow-hidden relative"
-        >
-          {/* Header */}
-          <div className="flex items-center justify-between px-5 py-4 border-b border-[#E2E8F0] dark:border-surface-700">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-[#0EA5E9]/10 flex items-center justify-center text-[#0EA5E9]">
-                <ScanLine size={18} />
-              </div>
-              <h3 className="text-lg font-bold font-heading text-[#0F172A] dark:text-white">{title}</h3>
-            </div>
-            <button onClick={onClose} className="p-2 text-surface-400 hover:text-surface-900 dark:hover:text-white hover:bg-surface-100 dark:hover:bg-surface-700 rounded-lg transition-colors">
-              <X size={18} />
+    <Modal open={open} onClose={close} title={title} size="sm"
+      description="Point the camera at the barcode, or use a USB scanner anywhere in the app.">
+      <div className="space-y-4">
+        <div className="grid grid-cols-2 gap-1 rounded-lg bg-surface-2 p-1">
+          {[['camera', Camera, 'Camera'], ['manual', Keyboard, 'Type code']].map(([value, Icon, label]) => (
+            <button key={value} type="button" onClick={() => setMode(value)}
+              className={`flex items-center justify-center gap-2 rounded-md py-1.5 text-[13px] font-medium ${mode === value ? 'bg-surface text-ink shadow-sm' : 'text-ink-3'}`}>
+              <Icon size={15} aria-hidden /> {label}
             </button>
+          ))}
+        </div>
+
+        {mode === 'camera' && (
+          <div className="relative aspect-[4/3] overflow-hidden rounded-lg bg-black">
+            <video ref={video} className="h-full w-full object-cover" playsInline muted autoPlay />
+            <div className="pointer-events-none absolute inset-x-[12%] top-1/2 h-[38%] -translate-y-1/2 rounded-md border-2 border-white/80 shadow-[0_0_0_9999px_rgb(0_0_0/0.35)]" aria-hidden>
+              <div className="absolute inset-x-2 top-1/2 h-px bg-red-500/80" />
+            </div>
+            <div className="absolute bottom-2 left-2 rounded bg-black/60 px-2 py-0.5 text-xs text-white">
+              {status === 'starting' ? 'Starting camera…' : status === 'scanning' ? 'Looking for a barcode…' : status === 'error' ? 'Camera unavailable' : ''}
+            </div>
+            {cameras.length > 1 && (
+              <button type="button" onClick={() => setCameraIndex((i) => (i + 1) % cameras.length)}
+                className="absolute right-2 top-2 rounded-full bg-black/60 p-2 text-white" aria-label="Switch camera">
+                <RefreshCw size={16} aria-hidden />
+              </button>
+            )}
           </div>
+        )}
 
-          {/* Mode Tabs */}
-          <div className="flex gap-1 bg-[#F1F5F9] dark:bg-surface-900 p-1 mx-5 mt-4 rounded-lg">
-            <button
-              onClick={() => { if (devices.length > 0) setMode('camera'); }}
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-bold rounded-md transition-all ${mode === 'camera' ? 'bg-white dark:bg-surface-700 shadow-sm text-[#0EA5E9]' : 'text-surface-500 hover:text-surface-700'}`}
-              disabled={devices.length === 0}
-            >
-              <Camera size={16} /> Camera
-            </button>
-            <button
-              onClick={() => setMode('manual')}
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-bold rounded-md transition-all ${mode === 'manual' ? 'bg-white dark:bg-surface-700 shadow-sm text-[#0EA5E9]' : 'text-surface-500 hover:text-surface-700'}`}
-            >
-              <Keyboard size={16} /> Manual
-            </button>
-          </div>
-
-          {/* Camera Mode */}
-          {mode === 'camera' && (
-            <div className="p-5">
-              <div className="relative rounded-xl overflow-hidden bg-black aspect-[4/3]">
-                <video ref={videoRef} className="w-full h-full object-cover" />
-
-                {/* Scanner overlay */}
-                <div className="absolute inset-0 pointer-events-none">
-                  {/* Scan region box */}
-                  <div className="absolute inset-[15%]">
-                    <div className="absolute top-0 left-0 w-8 h-8 border-t-[3px] border-l-[3px] border-[#0EA5E9] rounded-tl-lg" />
-                    <div className="absolute top-0 right-0 w-8 h-8 border-t-[3px] border-r-[3px] border-[#0EA5E9] rounded-tr-lg" />
-                    <div className="absolute bottom-0 left-0 w-8 h-8 border-b-[3px] border-l-[3px] border-[#0EA5E9] rounded-bl-lg" />
-                    <div className="absolute bottom-0 right-0 w-8 h-8 border-b-[3px] border-r-[3px] border-[#0EA5E9] rounded-br-lg" />
-
-                    {/* Scanning laser line */}
-                    <motion.div
-                      animate={{ y: ['0%', '100%', '0%'] }}
-                      transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
-                      className="absolute left-2 right-2 h-0.5 bg-gradient-to-r from-transparent via-[#0EA5E9] to-transparent shadow-[0_0_8px_2px_rgba(14,165,233,0.4)]"
-                    />
-                  </div>
-                </div>
-
-                {/* Camera switch button */}
-                {devices.length > 1 && (
-                  <button
-                    onClick={switchCamera}
-                    className="absolute top-3 right-3 p-2 bg-black/50 hover:bg-black/70 text-white rounded-full backdrop-blur-sm transition-colors"
-                  >
-                    <RefreshCw size={18} />
-                  </button>
-                )}
-
-                {/* Scanning indicator */}
-                {scanning && (
-                  <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-sm text-white text-xs font-bold px-4 py-1.5 rounded-full flex items-center gap-2">
-                    <div className="w-2 h-2 bg-[#22C55E] rounded-full animate-pulse" />
-                    Scanning...
-                  </div>
-                )}
-              </div>
-              <p className="text-center text-sm text-surface-500 mt-3 font-medium">
-                Point camera at barcode or QR code
-              </p>
+        {mode === 'manual' && (
+          <form onSubmit={submitManual} className="space-y-2">
+            <div className="flex gap-2">
+              <BareInput
+                value={manual}
+                onChange={(e) => { setManual(e.target.value); setManualError(null); }}
+                placeholder="e.g. 8901234567890"
+                inputMode="numeric"
+                autoComplete="off"
+                data-autofocus
+                data-scan-target="true"
+                className="code text-base tracking-wider"
+                aria-label="Barcode"
+              />
+              <Button type="submit" icon={ScanLine} disabled={!manual.trim()}>Look up</Button>
             </div>
-          )}
+            {manualError && <p className="text-xs text-danger">{manualError}</p>}
+          </form>
+        )}
 
-          {/* Manual Mode */}
-          {mode === 'manual' && (
-            <form onSubmit={handleManualSubmit} className="p-5 space-y-4">
-              <div>
-                <label className="form-label">Enter Barcode / Product Code</label>
-                <input
-                  type="text"
-                  value={manualCode}
-                  onChange={(e) => setManualCode(e.target.value)}
-                  placeholder="e.g. 8901234567890"
-                  className="input-field font-mono text-lg text-center tracking-widest"
-                  autoFocus
-                />
-              </div>
-              <Button type="submit" className="w-full" disabled={!manualCode.trim()}>
-                <ScanLine size={16} className="mr-2" /> Look Up
-              </Button>
-            </form>
-          )}
-
-          {/* Error Message */}
-          {error && (
-            <div className="mx-5 mb-4 p-3 bg-[#FEF2F2] dark:bg-red-900/20 border border-[#FECACA] dark:border-red-800 rounded-lg text-sm text-[#DC2626] font-medium">
-              {error}
-            </div>
-          )}
-
-          {/* Last scanned feedback */}
-          {lastScanned && (
-            <div className="mx-5 mb-4 p-3 bg-[#F0FDF4] dark:bg-green-900/20 border border-[#BBF7D0] dark:border-green-800 rounded-lg text-sm text-[#16A34A] font-bold flex items-center gap-2">
-              <div className="w-2 h-2 bg-[#22C55E] rounded-full" />
-              Last scanned: <span className="font-mono">{lastScanned}</span>
-            </div>
-          )}
-        </motion.div>
+        {message && <InlineAlert tone={status === 'error' ? 'danger' : 'info'}>{message}</InlineAlert>}
       </div>
-    </AnimatePresence>
+    </Modal>
   );
 }

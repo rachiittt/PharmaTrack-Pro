@@ -5,7 +5,7 @@ import { useSession } from '../context/SessionContext';
 import { useAsync } from '../hooks/useAsync';
 import { inviteMember, listAuditLog, listMembers, updateMember } from '../services/pharmacy';
 import { ROLE_DESCRIPTIONS, ROLE_LABELS } from '../lib/roles';
-import { dateTime, date } from '../lib/format';
+import { dateTime, date, money } from '../lib/format';
 import { Button } from '../components/ui/Button';
 import { BareSelect, Checkbox, Input, Select } from '../components/ui/Field';
 import { Panel } from '../components/ui/Panel';
@@ -117,7 +117,7 @@ export default function Team() {
           { key: 'detail', header: 'Detail', hideBelow: 'md', render: (a) => (
             <span className="block max-w-[420px] truncate text-xs text-ink-3">
               {a.details?.invoice_no || a.details?.reference_no || a.details?.reason || a.details?.name || a.details?.email || ''}
-              {a.details?.total != null && ` · ₹${a.details.total}`}
+              {a.details?.total != null && ` · ${money(a.details.total)}`}
             </span>
           ) },
         ]} empty={<EmptyState compact title="No activity yet" />} />

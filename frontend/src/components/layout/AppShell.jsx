@@ -66,7 +66,7 @@ function Sidebar({ onNavigate }) {
             <label className="block">
               <span className="sr-only">Pharmacy</span>
               <select value={pharmacy.id} onChange={(e) => { selectPharmacy(e.target.value); navigate('/'); }}
-                className="w-full truncate rounded-lg border border-white/10 bg-sidebar-2 px-2.5 py-2 text-[13px] font-medium text-sidebar-ink-strong">
+                className="select-chevron w-full truncate rounded-lg border border-white/10 bg-sidebar-2 py-2 pl-2.5 pr-8 text-[13px] font-medium text-sidebar-ink-strong">
                 {memberships.map((m) => <option key={m.pharmacy.id} value={m.pharmacy.id}>{m.pharmacy.name}</option>)}
               </select>
             </label>
@@ -142,7 +142,7 @@ function NotificationBell() {
     const unsubscribe = subscribeToPharmacy(pharmacy.id, {
       onNotification: (n) => {
         setCount((c) => c + 1);
-        if (n.severity === 'critical') toast(n.title, { icon: '⚠️' });
+        if (n.severity === 'critical') toast(n.title, { icon: <AlertTriangle size={16} className="text-danger" aria-hidden /> });
       },
     });
     return () => { alive = false; unsubscribe(); };
@@ -170,7 +170,7 @@ function NotificationBell() {
       <button type="button" onClick={() => setOpen((o) => !o)} aria-label={`Notifications${count ? `, ${count} unread` : ''}`} aria-expanded={open}
         className="relative inline-flex h-9 w-9 items-center justify-center rounded-lg text-ink-2 hover:bg-surface-2">
         <Bell size={18} aria-hidden />
-        {count > 0 && <span className="absolute right-1 top-1 min-w-[16px] rounded-full bg-danger px-1 text-center text-[10px] font-semibold leading-4 text-white num">{count > 99 ? '99+' : count}</span>}
+        {count > 0 && <span className="absolute right-1 top-1 min-w-[16px] rounded-full bg-danger px-1 text-center text-[10px] font-semibold leading-4 text-on-danger num">{count > 99 ? '99+' : count}</span>}
       </button>
       {open && (
         <div className="absolute right-0 top-11 z-40 w-[min(360px,calc(100vw-24px))] rounded-xl border border-line bg-surface shadow-pop">

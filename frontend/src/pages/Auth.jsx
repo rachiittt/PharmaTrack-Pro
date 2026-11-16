@@ -33,14 +33,14 @@ function AuthLayout({ title, subtitle, children, footer }) {
           {footer && <div className="mt-6 text-sm text-ink-3">{footer}</div>}
         </div>
       </div>
-      <aside className="hidden w-[44%] max-w-[620px] flex-col justify-between bg-sidebar p-10 text-sidebar-ink lg:flex">
+      <aside className="hidden w-[44%] max-w-[620px] flex-col justify-between border-l border-line bg-sidebar p-10 text-sidebar-ink lg:flex">
         <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-sidebar-ink/60">For independent pharmacies & chains</div>
         <div>
           <p className="max-w-md text-[28px] font-semibold leading-tight text-sidebar-ink-strong">
             Every strip, every batch, every expiry — accounted for.
           </p>
           <dl className="mt-10 grid max-w-md grid-cols-3 gap-6 text-sm">
-            {[['FEFO', 'billing from the earliest-expiring batch'], ['GST', 'tax invoices with CGST/SGST split'], ['RLS', 'each pharmacy sees only its own data']].map(([k, v]) => (
+            {[['FEFO', 'billing from the earliest-expiring batch'], ['GST', 'tax invoices with CGST/SGST split'], ['Rx', 'doctor recorded for Schedule H, H1 and X drugs']].map(([k, v]) => (
               <div key={k}><dt className="code text-base font-semibold text-sidebar-ink-strong">{k}</dt><dd className="mt-1 text-xs leading-snug text-sidebar-ink/80">{v}</dd></div>
             ))}
           </dl>

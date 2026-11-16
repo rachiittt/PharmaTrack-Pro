@@ -1,3 +1,5 @@
+import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { Button } from './Button';
 import { Skeleton } from './States';
 
 /**
@@ -63,11 +65,11 @@ export function Pagination({ page, pageSize, total, onChange }) {
   return (
     <div className="flex items-center justify-between gap-3 border-t border-line px-3 py-2.5 text-xs text-ink-3">
       <span className="num">{from}–{to} of {total}</span>
-      <div className="flex gap-1">
-        <button type="button" className="rounded-md px-2.5 py-1 hover:bg-surface-2 disabled:opacity-40" disabled={page <= 1} onClick={() => onChange(page - 1)}>Previous</button>
-        <span className="px-2 py-1 num">{page} / {pages}</span>
-        <button type="button" className="rounded-md px-2.5 py-1 hover:bg-surface-2 disabled:opacity-40" disabled={page >= pages} onClick={() => onChange(page + 1)}>Next</button>
-      </div>
+      <nav className="flex items-center gap-1" aria-label="Pagination">
+        <Button variant="ghost" size="xs" icon={ChevronLeft} disabled={page <= 1} onClick={() => onChange(page - 1)} aria-label="Previous page">Previous</Button>
+        <span className="num px-1.5 text-ink-2">{page} / {pages}</span>
+        <Button variant="ghost" size="xs" iconRight={ChevronRight} disabled={page >= pages} onClick={() => onChange(page + 1)} aria-label="Next page">Next</Button>
+      </nav>
     </div>
   );
 }

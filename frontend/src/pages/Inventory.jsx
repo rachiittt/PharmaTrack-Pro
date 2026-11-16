@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Boxes, Download, Plus, ScanLine, Search } from 'lucide-react';
+import { Boxes, Download, Info, Plus, ScanLine, Search } from 'lucide-react';
 import { useSession } from '../context/SessionContext';
 import { useAsync, useDebounced } from '../hooks/useAsync';
 import { useBarcodeWedge } from '../hooks/useBarcodeWedge';
@@ -59,7 +59,7 @@ export default function Inventory() {
         { label: 'Min level', value: 'min_stock_level' }, { label: 'Next expiry', value: 'next_expiry' },
         { label: 'Stock value (cost)', value: 'stock_value' }, { label: 'Rack', value: 'rack_location' }, { label: 'Supplier', value: 'supplier_name' },
       ]);
-      if (all.total > 200) toast('Exported the first 200 rows. Use Reports for the full valuation.', { icon: 'ℹ️' });
+      if (all.total > 200) toast('Exported the first 200 rows. Use Reports for the full valuation.', { icon: <Info size={16} className="text-info" aria-hidden /> });
     } catch (e) { toast.error(e.message); }
   }
 

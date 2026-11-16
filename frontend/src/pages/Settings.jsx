@@ -8,6 +8,7 @@ import { ROLE_LABELS } from '../lib/roles';
 import { Button } from '../components/ui/Button';
 import { Checkbox, Input } from '../components/ui/Field';
 import { Panel } from '../components/ui/Panel';
+import { Modal } from '../components/ui/Modal';
 import { PageHeader } from '../components/ui/Misc';
 import { Badge } from '../components/ui/Badge';
 
@@ -123,10 +124,15 @@ function BranchesSection() {
     try { await createBranch(pharmacy.id, { name: name.trim() }); setName(''); await refresh(); toast.success('Branch added'); }
     catch (e) { toast.error(e.message); } finally { setBusy(false); }
   }
-  async function rename(b) {
-    const next = window.prompt('Branch name', b.name);
-    if (!next || next.trim() === b.name) return;
-    try { await updateBranch(b.id, { name: next.trim() }); await refresh(); toast.success('Branch renamed'); } catch (e) { toast.error(e.message); }
+  const [renaming, setRenaming] = useState(null); // { branch, name }
+  const [renameBusy, setRenameBusy] = useState(false);
+  async function rename(e) {
+    e.preventDefault();
+    const next = renaming.name.trim();
+    if (next === renaming.branch.name) { setRenaming(null); return; }
+    setRenameBusy(true);
+    try { await updateBranch(renaming.branch.id, { name: next }); await refresh(); toast.success(`Branch renamed to ${next}`); setRenaming(null); }
+    catch (err) { toast.error(err.message); } finally { setRenameBusy(false); }
   }
   return (
     <Section title="Branches" description="Stock, bills and purchases are kept per branch.">
@@ -134,7 +140,7 @@ function BranchesSection() {
         {branches.map((b) => (
           <li key={b.id} className="flex items-center justify-between px-4 py-2.5 text-sm">
             <span>{b.name} {b.is_default && <Badge className="ml-1">Default</Badge>}</span>
-            <Button size="xs" variant="ghost" onClick={() => rename(b)}>Rename</Button>
+            <Button size="xs" variant="ghost" onClick={() => setRenaming({ branch: b, name: b.name })}>Rename</Button>
           </li>
         ))}
       </ul>
@@ -142,6 +148,18 @@ function BranchesSection() {
         <Input label="New branch" value={name} onChange={(e) => setName(e.target.value)} className="flex-1" placeholder="e.g. Sector 21" />
         <Button icon={Plus} variant="secondary" className="self-end" onClick={add} loading={busy} disabled={name.trim().length < 2}>Add</Button>
       </div>
+      <Modal open={Boolean(renaming)} onClose={() => (renameBusy ? undefined : setRenaming(null))} title="Rename branch" size="sm"
+        description={renaming ? `Currently “${renaming.branch.name}”. The new name appears on bills and in the branch switcher.` : ''}
+        footer={(
+          <>
+            <Button variant="secondary" onClick={() => setRenaming(null)} disabled={renameBusy}>Cancel</Button>
+            <Button type="submit" form="rename-branch-form" loading={renameBusy} disabled={(renaming?.name.trim().length ?? 0) < 2}>Save name</Button>
+          </>
+        )}>
+        <form id="rename-branch-form" onSubmit={rename}>
+          <Input label="Branch name" required value={renaming?.name ?? ''} onChange={(e) => setRenaming({ ...renaming, name: e.target.value })} data-autofocus />
+        </form>
+      </Modal>
     </Section>
   );
 }

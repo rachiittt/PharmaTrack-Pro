@@ -1,4 +1,5 @@
-import { useId } from 'react';
+import { useId, useState } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 
 const control = `w-full rounded-lg border border-line-strong bg-surface px-3 text-sm text-ink placeholder:text-ink-3
   transition-colors hover:border-ink-3 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20
@@ -23,13 +24,22 @@ export function Field({ label, hint, error, required, children, className = '', 
   );
 }
 
-export function Input({ label, hint, error, required, className = '', inputClassName = '', prefix, ...props }) {
+export function Input({ label, hint, error, required, className = '', inputClassName = '', prefix, type, ...props }) {
+  const [reveal, setReveal] = useState(false);
+  const isPassword = type === 'password';
   return (
     <Field label={label} hint={hint} error={error} required={required} className={className} id={props.id}>
       {(a11y) => (
         <div className="relative">
           {prefix && <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-3 text-sm">{prefix}</span>}
-          <input {...a11y} {...props} className={`${control} h-9 ${prefix ? 'pl-7' : ''} ${inputClassName}`} />
+          <input {...a11y} {...props} type={isPassword && reveal ? 'text' : type}
+            className={`${control} h-9 ${prefix ? 'pl-7' : ''} ${isPassword ? 'pr-10' : ''} ${inputClassName}`} />
+          {isPassword && (
+            <button type="button" onClick={() => setReveal((r) => !r)} aria-label={reveal ? 'Hide password' : 'Show password'} aria-pressed={reveal}
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-ink-3 transition-colors hover:text-ink">
+              {reveal ? <EyeOff size={15} aria-hidden /> : <Eye size={15} aria-hidden />}
+            </button>
+          )}
         </div>
       )}
     </Field>
@@ -40,7 +50,7 @@ export function Select({ label, hint, error, required, className = '', options =
   return (
     <Field label={label} hint={hint} error={error} required={required} className={className} id={props.id}>
       {(a11y) => (
-        <select {...a11y} {...props} className={`${control} h-9 pr-8`}>
+        <select {...a11y} {...props} className={`${control} select-chevron h-9 pr-8`}>
           {placeholder !== undefined && <option value="">{placeholder}</option>}
           {options.map((o) => (typeof o === 'string'
             ? <option key={o} value={o}>{o}</option>
@@ -67,7 +77,7 @@ export function BareInput({ className = '', ...props }) {
 
 export function BareSelect({ className = '', options = [], ...props }) {
   return (
-    <select {...props} className={`${control} h-9 pr-8 ${className}`}>
+    <select {...props} className={`${control} select-chevron h-9 pr-8 ${className}`}>
       {options.map((o) => (typeof o === 'string'
         ? <option key={o} value={o}>{o}</option>
         : <option key={o.value} value={o.value}>{o.label}</option>))}

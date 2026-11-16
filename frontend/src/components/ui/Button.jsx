@@ -4,7 +4,7 @@ const VARIANTS = {
   primary: 'bg-primary text-on-primary hover:bg-primary-hover shadow-sm',
   secondary: 'bg-surface text-ink border border-line-strong hover:bg-surface-2',
   ghost: 'text-ink-2 hover:bg-surface-2 hover:text-ink',
-  danger: 'bg-danger text-white hover:opacity-90',
+  danger: 'bg-danger text-on-danger hover:brightness-95 shadow-sm',
   'danger-outline': 'border border-danger/40 text-danger hover:bg-danger-soft',
   soft: 'bg-primary-soft text-primary-ink hover:brightness-95',
 };

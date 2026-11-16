@@ -164,7 +164,7 @@ export function BarcodeScanner({ open, onClose, onDetected, title = 'Scan barcod
           <div className="relative aspect-[4/3] overflow-hidden rounded-lg bg-black">
             <video ref={video} className="h-full w-full object-cover" playsInline muted autoPlay />
             <div className="pointer-events-none absolute inset-x-[12%] top-1/2 h-[38%] -translate-y-1/2 rounded-md border-2 border-white/80 shadow-[0_0_0_9999px_rgb(0_0_0/0.35)]" aria-hidden>
-              <div className="absolute inset-x-2 top-1/2 h-px bg-red-500/80" />
+              <div className="absolute inset-x-2 top-1/2 h-px bg-danger/80" />
             </div>
             <div className="absolute bottom-2 left-2 rounded bg-black/60 px-2 py-0.5 text-xs text-white">
               {status === 'starting' ? 'Starting camera…' : status === 'scanning' ? 'Looking for a barcode…' : status === 'error' ? 'Camera unavailable' : ''}

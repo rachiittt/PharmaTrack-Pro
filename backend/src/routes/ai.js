@@ -29,6 +29,7 @@ function aiRouter({ supabase, config, anthropic }) {
   const staff = requireMember('owner', 'manager', 'pharmacist');
 
   async function enforceQuota(pharmacyId) {
+    if (!supabase.admin) return; // metering needs the service-role key
     const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
     const { count, error } = await supabase.admin
       .from('ai_requests').select('id', { count: 'exact', head: true })
